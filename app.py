@@ -12,6 +12,7 @@ import plotly.express as px
 import streamlit as st
 
 from detector import run_all_detections
+from generator import generate_security_logs, save_security_logs
 from parser import REQUIRED_COLUMNS, load_security_logs
 from risk_scoring import get_risk_level, score_alerts
 
@@ -54,8 +55,20 @@ def run_security_pipeline(logs: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(show_spinner=False)
 def load_default_logs(file_path: str) -> pd.DataFrame:
-    """Load and normalize the generated on-disk dataset."""
-    return load_security_logs(file_path)
+    """Load the default logs, generating them when the CSV is unavailable."""
+    path = Path(file_path)
+    if path.is_file():
+        return load_security_logs(path)
+
+    generated_logs = generate_security_logs()
+    try:
+        save_security_logs(generated_logs, path)
+    except OSError:
+        # Some deployment filesystems are read-only. The generated DataFrame is
+        # still valid and can be analyzed without persisting it to disk.
+        return generated_logs
+
+    return load_security_logs(path)
 
 
 @st.cache_data(show_spinner=False)
